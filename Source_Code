@@ -1,0 +1,2123 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import hashlib
+import json
+import time
+import random
+import base64
+from PIL import Image
+from io import BytesIO
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+import uuid
+
+# App configuration
+st.set_page_config(page_title="Nexovault", page_icon="🌍", layout="wide", initial_sidebar_state="expanded")
+
+
+# Custom CSS for enhanced UI
+def local_css():
+    st.markdown("""
+   <style>
+       .main {
+           background-color: #111927;
+           color: #e0e0e0;
+       }
+       .stApp {
+           background: linear-gradient(135deg, #0f1729 0%, #111927 100%);
+       }
+       .css-18e3th9 {
+           padding-top: 2rem;
+           padding-bottom: 10rem;
+           padding-left: 5rem;
+           padding-right: 5rem;
+       }
+       .css-1d391kg {
+           padding-top: 3.5rem;
+       }
+       .stTabs [data-baseweb="tab-list"] {
+           gap: 8px;
+       }
+       .stTabs [data-baseweb="tab"] {
+           background-color: #192338;
+           border-radius: 4px 4px 0px 0px;
+           padding: 10px 20px;
+           margin-right: 2px;
+       }
+       .stTabs [aria-selected="true"] {
+           background-color: #213555;
+       }
+       .stButton>button {
+           background-color: #2e4a7d;
+           color: white;
+           border-radius: 6px;
+           border: none;
+           padding: 8px 16px;
+           font-weight: 600;
+           transition: all 0.3s;
+       }
+       .stButton>button:hover {
+           background-color: #4169E1;
+           transform: translateY(-2px);
+           box-shadow: 0 4px 12px rgba(65, 105, 225, 0.3);
+       }
+       h1, h2, h3 {
+           color: #e0e0e0;
+       }
+       .highlight {
+           background-color: #213555;
+           padding: 20px;
+           border-radius: 8px;
+           margin-bottom: 24px;
+       }
+       .card {
+           background-color: #192338;
+           padding: 24px;
+           border-radius: 12px;
+           box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+           margin-bottom: 24px;
+           transition: transform 0.3s ease;
+       }
+       .card:hover {
+           transform: translateY(-5px);
+       }
+       .metric-card {
+           background: linear-gradient(145deg, #213555, #192338);
+           padding: 16px;
+           border-radius: 10px;
+           text-align: center;
+           box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+       }
+       .metric-value {
+           font-size: 32px;
+           font-weight: bold;
+           margin: 8px 0;
+           color: #4CAF50;
+       }
+       .badge {
+           display: inline-block;
+           padding: 4px 12px;
+           background-color: #2e7d32;
+           color: white;
+           border-radius: 16px;
+           font-size: 12px;
+           font-weight: 600;
+           margin-right: 8px;
+       }
+       .table-container {
+           background-color: #1d2939;
+           border-radius: 8px;
+           padding: 16px;
+           overflow: auto;
+       }
+       .sidebar .sidebar-content {
+           background-color: #101725;
+       }
+       .notification {
+           padding: 10px 16px;
+           background-color: #2e7d32;
+           color: white;
+           border-radius: 6px;
+           margin-bottom: 12px;
+           animation: fadeIn 0.5s;
+       }
+       @keyframes fadeIn {
+           from { opacity: 0; transform: translateY(-10px); }
+           to { opacity: 1; transform: translateY(0); }
+       }
+   </style>
+   """, unsafe_allow_html=True)
+
+
+local_css()
+
+
+# Base64 encode images for custom UI elements
+def get_base64_encoded_image():
+    # This would be replaced with an actual image for production
+    img = Image.new('RGB', (100, 100), color=(73, 109, 137))
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
+
+# Blockchain implementation
+class Block:
+    def __init__(self, index, timestamp, transactions, previous_hash):
+        self.index = index
+        self.timestamp = timestamp
+        self.transactions = transactions
+        self.previous_hash = previous_hash
+        self.nonce = 0
+        self.hash = self.calculate_hash()
+
+    def calculate_hash(self):
+        block_string = json.dumps({
+            "index": self.index,
+            "timestamp": str(self.timestamp),
+            "transactions": self.transactions,
+            "previous_hash": self.previous_hash,
+            "nonce": self.nonce
+        }, sort_keys=True).encode()
+
+        return hashlib.sha256(block_string).hexdigest()
+
+    def mine_block(self, difficulty):
+        target = "0" * difficulty
+
+        while self.hash[:difficulty] != target:
+            self.nonce += 1
+            self.hash = self.calculate_hash()
+
+        return self.hash
+
+
+class Blockchain:
+    def __init__(self, difficulty=4):
+        self.chain = []
+        self.pending_transactions = []
+        self.difficulty = difficulty
+        self.mining_reward = 10
+        self.create_genesis_block()
+
+    def create_genesis_block(self):
+        genesis_block = Block(0, datetime.now(), [], "0")
+        self.chain.append(genesis_block)
+
+    def get_latest_block(self):
+        return self.chain[-1]
+
+    def add_transaction(self, sender, recipient, amount, transaction_type, details=None):
+        transaction = {
+            "sender": sender,
+            "recipient": recipient,
+            "amount": amount,
+            "timestamp": str(datetime.now()),
+            "transaction_type": transaction_type,
+            "details": details if details else {},
+            "signature": ""  # In a real app, this would be cryptographically signed
+        }
+
+        self.pending_transactions.append(transaction)
+        return self.get_latest_block().index + 1
+
+    def mine_pending_transactions(self, mining_reward_address):
+        block = Block(
+            len(self.chain),
+            datetime.now(),
+            self.pending_transactions,
+            self.get_latest_block().hash
+        )
+
+        block.mine_block(self.difficulty)
+        self.chain.append(block)
+
+        # Reset pending transactions and add mining reward
+        self.pending_transactions = [
+            {
+                "sender": "NETWORK",
+                "recipient": mining_reward_address,
+                "amount": self.mining_reward,
+                "timestamp": str(datetime.now()),
+                "transaction_type": "MINING_REWARD",
+                "details": {},
+                "signature": ""
+            }
+        ]
+
+    def is_chain_valid(self):
+        for i in range(1, len(self.chain)):
+            current_block = self.chain[i]
+            previous_block = self.chain[i - 1]
+
+            if current_block.hash != current_block.calculate_hash():
+                return False
+
+            if current_block.previous_hash != previous_block.hash:
+                return False
+
+        return True
+
+    def get_balance(self, address):
+        balance = 0
+
+        for block in self.chain:
+            for transaction in block.transactions:
+                if transaction["recipient"] == address:
+                    balance += transaction["amount"]
+
+                if transaction["sender"] == address:
+                    balance -= transaction["amount"]
+
+        return balance
+
+    def get_user_transactions(self, address):
+        transactions = []
+
+        for block in self.chain:
+            for transaction in block.transactions:
+                if transaction["sender"] == address or transaction["recipient"] == address:
+                    transactions.append(transaction)
+
+        return transactions
+
+
+# Smart Contract implementation
+class SmartContract:
+    def __init__(self, contract_id, creator, contract_type, terms, expiration=None):
+        self.contract_id = contract_id
+        self.creator = creator
+        self.contract_type = contract_type
+        self.terms = terms
+        self.creation_date = datetime.now()
+        self.expiration = expiration
+        self.status = "ACTIVE"
+        self.parties = [creator]
+        self.signatures = {}
+        self.execution_history = []
+
+    def add_party(self, party_address):
+        if party_address not in self.parties:
+            self.parties.append(party_address)
+            return True
+        return False
+
+    def sign_contract(self, party_address, signature):
+        if party_address in self.parties:
+            self.signatures[party_address] = signature
+            self.execution_history.append({
+                "event": "SIGNATURE",
+                "party": party_address,
+                "timestamp": str(datetime.now())
+            })
+            return True
+        return False
+
+    def is_fully_signed(self):
+        return len(self.signatures) == len(self.parties)
+
+    def execute(self, blockchain, execution_details=None):
+        if not self.is_fully_signed():
+            return False, "Not all parties have signed the contract"
+
+        if self.status != "ACTIVE":
+            return False, f"Contract is {self.status}"
+
+        if self.expiration and datetime.now() > self.expiration:
+            self.status = "EXPIRED"
+            return False, "Contract has expired"
+
+        # Different contract execution logic based on contract type
+        if self.contract_type == "GOODS_EXCHANGE":
+            seller = self.terms["seller"]
+            buyer = self.terms["buyer"]
+            amount = self.terms["amount"]
+
+            if blockchain.get_balance(buyer) < amount:
+                return False, "Buyer has insufficient funds"
+
+            blockchain.add_transaction(
+                buyer,
+                seller,
+                amount,
+                "CONTRACT_EXECUTION",
+                {"contract_id": self.contract_id}
+            )
+
+        elif self.contract_type == "SERVICE_AGREEMENT":
+            client = self.terms["client"]
+            provider = self.terms["provider"]
+            amount = self.terms["amount"]
+
+            if blockchain.get_balance(client) < amount:
+                return False, "Client has insufficient funds"
+
+            # In a real app, this would include escrow mechanics
+            blockchain.add_transaction(
+                client,
+                provider,
+                amount,
+                "CONTRACT_EXECUTION",
+                {"contract_id": self.contract_id}
+            )
+
+        self.status = "EXECUTED"
+        self.execution_history.append({
+            "event": "EXECUTION",
+            "timestamp": str(datetime.now()),
+            "details": execution_details if execution_details else {}
+        })
+
+        return True, "Contract executed successfully"
+
+    def terminate(self, reason):
+        self.status = "TERMINATED"
+        self.execution_history.append({
+            "event": "TERMINATION",
+            "timestamp": str(datetime.now()),
+            "reason": reason
+        })
+        return True
+
+
+class SmartContractManager:
+    def __init__(self, blockchain):
+        self.blockchain = blockchain
+        self.contracts = {}
+
+    def create_contract(self, creator, contract_type, terms, expiration=None):
+        contract_id = str(uuid.uuid4())
+        new_contract = SmartContract(contract_id, creator, contract_type, terms, expiration)
+        self.contracts[contract_id] = new_contract
+        return contract_id
+
+    def get_contract(self, contract_id):
+        return self.contracts.get(contract_id)
+
+    def get_user_contracts(self, user_address):
+        user_contracts = []
+        for contract_id, contract in self.contracts.items():
+            if user_address in contract.parties:
+                user_contracts.append(contract)
+        return user_contracts
+
+    def execute_contract(self, contract_id, execution_details=None):
+        contract = self.get_contract(contract_id)
+        if not contract:
+            return False, "Contract not found"
+
+        return contract.execute(self.blockchain, execution_details)
+
+
+# AI Models for Economic Prediction
+class EconomicAI:
+    def __init__(self):
+        self.supply_demand_model = self._create_mock_supply_demand_model()
+        self.growth_prediction_model = self._create_mock_growth_prediction_model()
+        self.market_trend_data = self._create_mock_market_data()
+
+    def _create_mock_supply_demand_model(self):
+        # In a real app, this would be a trained ML model
+        X = np.random.rand(100, 4)
+        y = 3 * X[:, 0] - 2 * X[:, 1] + 0.5 * X[:, 2] + np.random.normal(0, 0.1, 100)
+
+        model = Pipeline([
+            ('scaler', StandardScaler()),
+            ('regressor', RandomForestRegressor(n_estimators=100, random_state=42))
+        ])
+
+        model.fit(X, y)
+        return model
+
+    def _create_mock_growth_prediction_model(self):
+        # In a real app, this would be a trained ML model
+        X = np.random.rand(100, 6)
+        y = 2 * X[:, 0] + 1.5 * X[:, 1] - X[:, 2] + 0.7 * X[:, 3] + np.random.normal(0, 0.2, 100)
+
+        model = Pipeline([
+            ('scaler', StandardScaler()),
+            ('regressor', RandomForestRegressor(n_estimators=100, random_state=42))
+        ])
+
+        model.fit(X, y)
+        return model
+
+    def _create_mock_market_data(self):
+        categories = ["Agriculture", "Handicrafts", "Services", "Technology", "Education"]
+
+        market_data = []
+        for i in range(100):
+            date = datetime.now() - timedelta(days=i)
+            for category in categories:
+                market_data.append({
+                    "date": date,
+                    "category": category,
+                    "demand": random.uniform(50, 150) + (50 * np.sin(i / 10)),
+                    "supply": random.uniform(40, 160) + (40 * np.sin(i / 10 + 1)),
+                    "price": random.uniform(5, 20) + (5 * np.sin(i / 10 + 2)),
+                    "volume": random.uniform(100, 500) + (100 * np.sin(i / 10 + 3))
+                })
+
+        return pd.DataFrame(market_data)
+
+    def predict_supply_demand(self, category, features):
+        # In a real app, features would be actual economic indicators
+        # Here we're using mock features
+        features_array = np.array(features).reshape(1, -1)
+        prediction = self.supply_demand_model.predict(features_array)[0]
+
+        confidence = random.uniform(0.7, 0.95)
+
+        return {
+            "category": category,
+            "predicted_demand": max(0, prediction + random.uniform(-5, 5)),
+            "confidence": confidence,
+            "factors": {
+                "seasonal_trends": random.uniform(0.8, 1.2),
+                "market_growth": random.uniform(-0.1, 0.2),
+                "competitor_activity": random.uniform(0.7, 1.3),
+                "consumer_preference": random.uniform(0.9, 1.1)
+            }
+        }
+
+    def recommend_economic_strategies(self, user_data, local_market_data):
+        # Generate strategies based on user data and market conditions
+        strategies = []
+
+        # In a real app, these would be derived from actual analysis
+        if random.random() > 0.5:
+            strategies.append({
+                "strategy_type": "DIVERSIFICATION",
+                "description": "Expand into complementary product categories",
+                "expected_growth": random.uniform(0.05, 0.15),
+                "implementation_cost": random.uniform(100, 500),
+                "risk_level": "MEDIUM"
+            })
+
+        if random.random() > 0.5:
+            strategies.append({
+                "strategy_type": "COLLABORATION",
+                "description": "Partner with local producers to reduce supply chain costs",
+                "expected_growth": random.uniform(0.03, 0.12),
+                "implementation_cost": random.uniform(50, 200),
+                "risk_level": "LOW"
+            })
+
+        if random.random() > 0.7:
+            strategies.append({
+                "strategy_type": "INNOVATION",
+                "description": "Invest in technology to improve production efficiency",
+                "expected_growth": random.uniform(0.1, 0.25),
+                "implementation_cost": random.uniform(300, 1000),
+                "risk_level": "HIGH"
+            })
+
+        if random.random() > 0.6:
+            strategies.append({
+                "strategy_type": "MARKET_EXPANSION",
+                "description": "Target neighboring communities with your products",
+                "expected_growth": random.uniform(0.08, 0.2),
+                "implementation_cost": random.uniform(200, 600),
+                "risk_level": "MEDIUM"
+            })
+
+        # Ensure we always have at least one strategy
+        if not strategies:
+            strategies.append({
+                "strategy_type": "MARKET_EXPANSION",
+                "description": "Target neighboring communities with your products",
+                "expected_growth": random.uniform(0.08, 0.2),
+                "implementation_cost": random.uniform(200, 600),
+                "risk_level": "MEDIUM"
+            })
+
+        return strategies
+
+    def get_market_trends(self, category=None, days=30):
+        filtered_data = self.market_trend_data
+
+        if category:
+            filtered_data = filtered_data[filtered_data["category"] == category]
+
+        recent_data = filtered_data[filtered_data["date"] >= datetime.now() - timedelta(days=days)]
+
+        # Group by date and calculate averages
+        if category:
+            trends = recent_data.sort_values(by="date")
+        else:
+            trends = recent_data.groupby(["date", "category"]).mean().reset_index()
+
+        return trends
+
+    def predict_gdp_impact(self, local_economy_data):
+        # In a real app, this would use actual economic models
+        features = np.random.rand(1, 6)  # Placeholder for real features
+        predicted_growth = self.growth_prediction_model.predict(features)[0]
+
+        return {
+            "predicted_growth_percentage": predicted_growth * 100,
+            "confidence_interval": [
+                (predicted_growth - 0.02) * 100,
+                (predicted_growth + 0.02) * 100
+            ],
+            "key_drivers": {
+                "local_production": random.uniform(0.2, 0.4),
+                "skills_development": random.uniform(0.1, 0.3),
+                "market_access": random.uniform(0.2, 0.5),
+                "capital_investment": random.uniform(0.1, 0.2)
+            }
+        }
+
+
+# Initialize the app state
+@st.cache_resource
+def initialize_app_state():
+    blockchain = Blockchain(difficulty=4)
+    contract_manager = SmartContractManager(blockchain)
+    economic_ai = EconomicAI()
+
+    # Create some sample users
+    users = {
+        "user1": {
+            "address": "0x1234567890abcdef1234567890abcdef12345678",
+            "name": "Srijay Bodapati",
+            "skills": ["Farming", "Handicrafts", "Teaching"],
+            "products": ["Organic Vegetables", "Handmade Textiles"],
+            "reputation_score": 4.8
+        },
+        "user2": {
+            "address": "0xabcdef1234567890abcdef1234567890abcdef12",
+            "name": "Varun Singh",
+            "skills": ["Carpentry", "Solar Installation", "Mechanics"],
+            "products": ["Wooden Furniture", "Solar Home Systems"],
+            "reputation_score": 4.6
+        },
+        "user3": {
+            "address": "0x7890abcdef1234567890abcdef1234567890abcd",
+            "name": "Allen Wrench",
+            "skills": ["Software Development", "Accounting", "Marketing"],
+            "products": ["Web Development Services", "Business Consulting"],
+            "reputation_score": 4.9
+        }
+    }
+
+    # Create some sample transactions
+    for _ in range(10):
+        sender = random.choice(list(users.values()))["address"]
+        recipient = random.choice(list(users.values()))["address"]
+        while sender == recipient:
+            recipient = random.choice(list(users.values()))["address"]
+
+        blockchain.add_transaction(
+            sender,
+            recipient,
+            random.uniform(1, 50),
+            "PAYMENT",
+            {"note": "Sample transaction"}
+        )
+
+    # Mine the pending transactions
+    blockchain.mine_pending_transactions("0x0000000000000000000000000000000000000000")
+
+    # Create some sample contracts
+    for _ in range(5):
+        creator = random.choice(list(users.values()))["address"]
+        second_party = random.choice(list(users.values()))["address"]
+        while creator == second_party:
+            second_party = random.choice(list(users.values()))["address"]
+
+        contract_type = random.choice(["GOODS_EXCHANGE", "SERVICE_AGREEMENT"])
+
+        if contract_type == "GOODS_EXCHANGE":
+            terms = {
+                "seller": creator,
+                "buyer": second_party,
+                "item": random.choice(
+                    ["Organic Vegetables", "Handmade Textiles", "Wooden Furniture", "Solar Home Systems"]),
+                "quantity": random.randint(1, 10),
+                "amount": random.uniform(5, 100),
+                "delivery_date": str(datetime.now() + timedelta(days=random.randint(1, 30)))
+            }
+        else:
+            terms = {
+                "provider": creator,
+                "client": second_party,
+                "service": random.choice(["Web Development", "Carpentry Work", "Teaching", "Consulting"]),
+                "hours": random.randint(1, 40),
+                "amount": random.uniform(10, 200),
+                "completion_date": str(datetime.now() + timedelta(days=random.randint(1, 30)))
+            }
+
+        contract_id = contract_manager.create_contract(
+            creator,
+            contract_type,
+            terms,
+            expiration=datetime.now() + timedelta(days=random.randint(30, 90))
+        )
+
+        contract = contract_manager.get_contract(contract_id)
+        contract.add_party(second_party)
+        contract.sign_contract(creator, "0xsignature1")
+
+        if random.random() > 0.5:
+            contract.sign_contract(second_party, "0xsignature2")
+
+            if random.random() > 0.7:
+                contract.execute(blockchain, {"execution_note": "Sample execution"})
+
+    return {
+        "blockchain": blockchain,
+        "contract_manager": contract_manager,
+        "economic_ai": economic_ai,
+        "users": users,
+        "current_user": list(users.keys())[0],
+        "notifications": [
+            {"message": "Welcome to Nexovault!", "timestamp": datetime.now()},
+            {"message": "New market opportunity detected in Agriculture sector",
+             "timestamp": datetime.now() - timedelta(hours=2)},
+            {"message": "Contract #XVC-2023 has been signed by all parties",
+             "timestamp": datetime.now() - timedelta(hours=5)}
+        ]
+    }
+
+
+# Navigation panel in the sidebar
+def render_sidebar():
+    st.sidebar.image("https://i.imghippo.com/files/LwBR1246JBk.png", width=300)
+    st.sidebar.markdown("#### AI-Powered Local Economy Builder")
+
+    # User selection (in a real app, this would be user login)
+    selected_user = st.sidebar.selectbox(
+        "Switch User",
+        options=list(app_state["users"].keys()),
+        format_func=lambda x: app_state["users"][x]["name"],
+        index=list(app_state["users"].keys()).index(app_state["current_user"])
+    )
+
+    if selected_user != app_state["current_user"]:
+        app_state["current_user"] = selected_user
+
+    # Show current user info
+    user = app_state["users"][app_state["current_user"]]
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"### {user['name']}")
+    st.sidebar.markdown(f"**Address**: {user['address'][:10]}...{user['address'][-8:]}")
+
+    # Calculate user balance
+    balance = app_state["blockchain"].get_balance(user["address"])
+    st.sidebar.markdown(f"**Balance**: {balance:.2f} XVT")
+
+    # Show reputation score with stars
+    st.sidebar.markdown(f"**Reputation**: {'⭐' * int(user['reputation_score'])} ({user['reputation_score']})")
+
+    # Navigation
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Navigation")
+
+    navigation = st.sidebar.radio(
+        "",
+        options=["Dashboard", "Marketplace", "Contracts", "Wallet", "AI Insights", "Community", "Settings"],
+        label_visibility="collapsed"
+    )
+
+    # Notifications
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Recent Notifications")
+
+    for notification in app_state["notifications"][:3]:
+        time_diff = datetime.now() - notification["timestamp"]
+        if time_diff.days > 0:
+            time_str = f"{time_diff.days}d ago"
+        elif time_diff.seconds // 3600 > 0:
+            time_str = f"{time_diff.seconds // 3600}h ago"
+        else:
+            time_str = f"{time_diff.seconds // 60}m ago"
+
+        st.sidebar.markdown(f"**{time_str}**: {notification['message']}")
+
+    if len(app_state["notifications"]) > 3:
+        st.sidebar.markdown("[See all notifications](#)")
+
+    return navigation
+
+
+# Settings page
+def render_settings():
+    st.title("Settings")
+    st.markdown("### Customize Your Experience")
+
+    # Load settings if not already in session state
+    if "user_settings" not in st.session_state:
+        st.session_state["user_settings"] = {
+            "theme": "Light",
+            "notifications": True,
+            "auto_update": False
+        }
+
+    # Select Theme
+    theme = st.selectbox("Select Theme", ["Light", "Dark", "System Default"],
+                         index=["Light", "Dark", "System Default"].index(
+                             st.session_state["user_settings"]["theme"]),
+                         key="theme_select")
+
+    # Enable Notifications
+    notifications = st.checkbox("Enable Notifications", value=st.session_state["user_settings"]["notifications"],
+                                key="notifications_checkbox")
+
+    # Auto-Update Toggle
+    auto_update = st.checkbox("Enable Auto-Update", value=st.session_state["user_settings"]["auto_update"],
+                              key="auto_update_checkbox")
+
+    # Save Button
+    if st.button("Save Settings", key="save_settings_button"):
+        st.session_state["user_settings"] = {
+            "theme": theme,
+            "notifications": notifications,
+            "auto_update": auto_update
+        }
+        st.success("Settings saved successfully!")
+
+
+# Main page rendering
+def render_dashboard():
+    st.title("Dashboard")
+    st.markdown("### Welcome to your Local Economy Hub")
+
+    user = app_state["users"][app_state["current_user"]]
+
+    # Top metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.markdown("#### Balance")
+        st.markdown(f'<div class="metric-value">{app_state["blockchain"].get_balance(user["address"]):.2f} XVT</div>',
+                    unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col2:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.markdown("#### Active Contracts")
+        user_contracts = app_state["contract_manager"].get_user_contracts(user["address"])
+        active_contracts = sum(1 for c in user_contracts if c.status == "ACTIVE")
+        st.markdown(f'<div class="metric-value">{active_contracts}</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col3:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.markdown("#### Reputation")
+        st.markdown(f'<div class="metric-value">{user["reputation_score"]}</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col4:
+        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        st.markdown("#### Market Rank")
+        st.markdown('<div class="metric-value">#3</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Economic health chart
+    st.markdown("### Local Economy Health")
+
+    eco_data = {
+        "date": pd.date_range(end=datetime.now(), periods=30, freq="D"),
+        "economic_activity": np.random.normal(100, 10, 30).cumsum() + 1000,
+        "transaction_volume": np.random.normal(50, 8, 30).cumsum() + 500,
+        "new_contracts": np.random.poisson(3, 30).cumsum() + 20
+    }
+
+    eco_df = pd.DataFrame(eco_data)
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=eco_df["date"],
+        y=eco_df["economic_activity"],
+        mode='lines',
+        name='Economic Activity',
+        line=dict(color='#4CAF50', width=3)
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=eco_df["date"],
+        y=eco_df["transaction_volume"],
+        mode='lines',
+        name='Transaction Volume',
+        line=dict(color='#2196F3', width=3)
+    ))
+
+    fig.update_layout(
+        title="Economic Activity Trends",
+        xaxis_title="Date",
+        yaxis_title="Activity Index",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        template="plotly_dark",
+        margin=dict(l=0, r=0, t=40, b=0),
+        height=350,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Recent activity and AI recommendations
+    col1, col2 = st.columns([6, 4])
+
+    with col1:
+        st.markdown("### Recent Marketplace Activity")
+
+        # Create some mock recent activity
+        recent_activity = []
+
+        for _ in range(5):
+            activity_type = random.choice(["NEW_LISTING", "COMPLETED_TRADE", "PRICE_CHANGE", "DEMAND_SPIKE"])
+
+            if activity_type == "NEW_LISTING":
+                product = random.choice(["Organic Vegetables", "Handmade Textiles", "Solar Panels", "Artisan Crafts",
+                                         "Educational Services"])
+                seller = random.choice(list(app_state["users"].values()))["name"]
+                activity = f"{seller} listed new product: {product}"
+            elif activity_type == "COMPLETED_TRADE":
+                product = random.choice(["Organic Vegetables", "Handmade Textiles", "Solar Panels", "Artisan Crafts",
+                                         "Educational Services"])
+                buyer = random.choice(list(app_state["users"].values()))["name"]
+                seller = random.choice(list(app_state["users"].values()))["name"]
+                while buyer == seller:
+                    seller = random.choice(list(app_state["users"].values()))["name"]
+                activity = f"{buyer} purchased {product} from {seller}"
+            elif activity_type == "PRICE_CHANGE":
+                product = random.choice(["Organic Vegetables", "Handmade Textiles", "Solar Panels", "Artisan Crafts",
+                                         "Educational Services"])
+                change = random.choice(["increased", "decreased"])
+                percentage = random.randint(5, 20)
+                activity = f"Price of {product} {change} by {percentage}%"
+            else:  # DEMAND_SPIKE
+                product = random.choice(["Organic Vegetables", "Handmade Textiles", "Solar Panels", "Artisan Crafts",
+                                         "Educational Services"])
+                activity = f"Rising demand detected for {product}"
+
+            recent_activity.append({
+                "type": activity_type,
+                "description": activity,
+                "timestamp": datetime.now() - timedelta(minutes=random.randint(5, 300))
+            })
+
+        # Sort by timestamp
+        recent_activity.sort(key=lambda x: x["timestamp"], reverse=True)
+
+        # Display activity
+        for activity in recent_activity:
+            time_diff = datetime.now() - activity["timestamp"]
+            if time_diff.days > 0:
+                time_str = f"{time_diff.days}d ago"
+            elif time_diff.seconds // 3600 > 0:
+                time_str = f"{time_diff.seconds // 3600}h ago"
+            else:
+                time_str = f"{time_diff.seconds // 60}m ago"
+
+            # Create icon based on activity type
+            if activity["type"] == "NEW_LISTING":
+                icon = "🆕"
+            elif activity["type"] == "COMPLETED_TRADE":
+                icon = "🔄"
+            elif activity["type"] == "PRICE_CHANGE":
+                icon = "💰"
+            else:  # DEMAND_SPIKE
+                icon = "📈"
+
+            st.markdown(f"{icon} **{time_str}**: {activity['description']}")
+
+    with col2:
+        st.markdown("### AI Recommendations")
+
+        # Generate AI recommendations
+        recommendations = app_state["economic_ai"].recommend_economic_strategies(
+            user,
+            app_state["economic_ai"].get_market_trends()
+        )
+
+        for i, recommendation in enumerate(recommendations):
+            with st.container():
+                st.markdown(f"#### {recommendation['strategy_type'].replace('_', ' ').title()}")
+                st.markdown(recommendation["description"])
+
+                # Create metrics for the recommendation
+                rec_col1, rec_col2 = st.columns(2)
+                with rec_col1:
+                    st.metric("Expected Growth", f"{recommendation['expected_growth'] * 100:.1f}%")
+                with rec_col2:
+                    st.metric("Risk Level", recommendation["risk_level"])
+
+                st.markdown(f"Implementation Cost: **{recommendation['implementation_cost']:.2f} XVT**")
+
+                if i < len(recommendations) - 1:
+                    st.markdown("---")
+
+    # Upcoming contracts
+    st.markdown("### Upcoming Contract Deadlines")
+    user_contracts = app_state["contract_manager"].get_user_contracts(user["address"])
+    active_contracts = [c for c in user_contracts if c.status == "ACTIVE"]
+
+    if active_contracts:
+        # Sort by expiration date
+        active_contracts.sort(key=lambda x: x.expiration if x.expiration else datetime.max)
+
+        for contract in active_contracts[:3]:
+            col1, col2, col3 = st.columns([3, 5, 2])
+
+            with col1:
+                st.markdown(f"**{contract.contract_type.replace('_', ' ').title()}**")
+                if contract.expiration:
+                    days_left = (contract.expiration - datetime.now()).days
+                    st.markdown(f"Expires in {days_left} days")
+
+            with col2:
+                if contract.contract_type == "GOODS_EXCHANGE":
+                    st.markdown(f"Item: {contract.terms['item']} (Qty: {contract.terms['quantity']})")
+                    counterparty = contract.terms["buyer"] if contract.terms["seller"] == user["address"] else \
+                        contract.terms["seller"]
+                    role = "Seller" if contract.terms["seller"] == user["address"] else "Buyer"
+                else:  # SERVICE_AGREEMENT
+                    st.markdown(f"Service: {contract.terms['service']} ({contract.terms['hours']} hours)")
+                    counterparty = contract.terms["client"] if contract.terms["provider"] == user["address"] else \
+                        contract.terms["provider"]
+                    role = "Provider" if contract.terms["provider"] == user["address"] else "Client"
+
+                # Find counterparty name
+                counterparty_name = ""
+                for u_id, u_data in app_state["users"].items():
+                    if u_data["address"] == counterparty:
+                        counterparty_name = u_data["name"]
+                        break
+
+                st.markdown(f"Role: {role} | With: {counterparty_name}")
+
+            with col3:
+                st.markdown(f"**{contract.terms['amount']:.2f} XVT**")
+                is_signed = user["address"] in contract.signatures
+                if is_signed:
+                    st.markdown("✅ Signed")
+                else:
+                    st.markdown("❌ Unsigned")
+    else:
+        st.info("You have no active contracts at the moment.")
+
+
+def render_marketplace():
+    st.title("Marketplace")
+    st.markdown("### Discover Products and Services")
+
+    # Search and filter options
+    col1, col2, col3 = st.columns([3, 2, 1])
+
+    with col1:
+        search_query = st.text_input("Search products and services", "")
+
+    with col2:
+        category_filter = st.selectbox(
+            "Category",
+            ["All Categories", "Agriculture", "Handicrafts", "Services", "Technology", "Education"]
+        )
+
+    with col3:
+        sort_by = st.selectbox(
+            "Sort By",
+            ["Relevance", "Price: Low to High", "Price: High to Low", "Rating"]
+        )
+
+    # Generate mock marketplace listings
+    categories = {
+        "Agriculture": ["Organic Vegetables", "Fresh Fruits", "Dairy Products", "Grains", "Herbs"],
+        "Handicrafts": ["Handmade Textiles", "Pottery", "Jewelry", "Baskets", "Woodwork"],
+        "Services": ["Tutoring", "Repair Services", "Transport", "Healthcare", "Cleaning"],
+        "Technology": ["Solar Panels", "Water Filters", "Mobile Repairs", "Computer Training", "Internet Access"],
+        "Education": ["Skill Workshops", "Language Classes", "Technical Training", "Children's Education",
+                      "Adult Literacy"]
+    }
+
+    listings = []
+
+    for category, products in categories.items():
+        if category_filter == "All Categories" or category_filter == category:
+            for product in products:
+                if search_query.lower() in product.lower() or not search_query:
+                    listings.append({
+                        "id": str(uuid.uuid4())[:8],
+                        "title": product,
+                        "category": category,
+                        "price": random.uniform(5, 100),
+                        "seller": random.choice(list(app_state["users"].values())),
+                        "rating": round(random.uniform(3.5, 5.0), 1),
+                        "description": f"Quality {product.lower()} available for immediate purchase.",
+                        "inventory": random.randint(1, 20),
+                        "image_url": "https://via.placeholder.com/150"
+                    })
+
+    # Sort listings
+    if sort_by == "Price: Low to High":
+        listings.sort(key=lambda x: x["price"])
+    elif sort_by == "Price: High to Low":
+        listings.sort(key=lambda x: x["price"], reverse=True)
+    elif sort_by == "Rating":
+        listings.sort(key=lambda x: x["rating"], reverse=True)
+
+    # Display market trends
+    st.markdown("### Market Trends")
+
+    trends_data = app_state["economic_ai"].get_market_trends(days=30)
+    categories_list = trends_data["category"].unique()
+
+    # Prepare data for the chart
+    chart_data = []
+    for category in categories_list:
+        cat_data = trends_data[trends_data["category"] == category]
+        chart_data.append({
+            "name": category,
+            "data": [{"x": date.strftime("%Y-%m-%d"), "y": demand}
+                     for date, demand in zip(cat_data["date"], cat_data["demand"])]
+        })
+
+    # Create a line chart with Plotly
+    fig = go.Figure()
+
+    for series in chart_data:
+        x_values = [point["x"] for point in series["data"]]
+        y_values = [point["y"] for point in series["data"]]
+
+        fig.add_trace(go.Scatter(
+            x=x_values,
+            y=y_values,
+            mode='lines',
+            name=series["name"]
+        ))
+
+    fig.update_layout(
+        title="Demand Trends by Category",
+        xaxis_title="Date",
+        yaxis_title="Demand Index",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        template="plotly_dark",
+        margin=dict(l=0, r=0, t=40, b=0),
+        height=300,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Display listings
+    st.markdown("### Available Products & Services")
+
+    listing_cols = st.columns(3)
+
+    for i, listing in enumerate(listings):
+        with listing_cols[i % 3]:
+            with st.container():
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+
+                st.image(listing["image_url"], caption=listing["title"])
+                st.markdown(f"**{listing['title']}**")
+                st.markdown(f"Category: {listing['category']}")
+                st.markdown(f"Price: **{listing['price']:.2f} XVT**")
+                st.markdown(f"Seller: {listing['seller']['name']}")
+                st.markdown(f"Rating: {'⭐' * int(listing['rating'])} ({listing['rating']})")
+                st.markdown(f"Available: {listing['inventory']} units")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.button(f"Buy Now", key=f"buy_{listing['id']}")
+                with col2:
+                    st.button(f"Details", key=f"details_{listing['id']}")
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+    # Market opportunities based on AI analysis
+    st.markdown("### Market Opportunities")
+
+    opportunities = []
+
+    # Generate some mock opportunities
+    for category in random.sample(list(categories.keys()), k=min(3, len(categories))):
+        features = [random.random() for _ in range(4)]
+        prediction = app_state["economic_ai"].predict_supply_demand(category, features)
+
+        opportunities.append({
+            "category": category,
+            "title": f"High Demand Predicted for {random.choice(categories[category])}",
+            "prediction": prediction["predicted_demand"],
+            "confidence": prediction["confidence"],
+            "growth": random.uniform(0.05, 0.25),
+            "analysis": "AI analysis indicates growing demand in this sector."
+        })
+
+    for i, opportunity in enumerate(opportunities):
+        st.markdown(f"#### {opportunity['title']}")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("Demand Prediction", f"{opportunity['prediction']:.1f}", f"{opportunity['growth'] * 100:.1f}%")
+
+        with col2:
+            st.metric("Confidence", f"{opportunity['confidence'] * 100:.1f}%")
+
+        with col3:
+            st.button("Explore Opportunity", key=f"explore_{i}")
+
+        st.markdown(opportunity["analysis"])
+        st.markdown("---")
+
+
+def render_contracts():
+    st.title("Smart Contracts")
+
+    # Contract sections
+    tabs = st.tabs(["Active Contracts", "Create Contract", "Contract History", "Templates"])
+
+    user = app_state["users"][app_state["current_user"]]
+    user_contracts = app_state["contract_manager"].get_user_contracts(user["address"])
+
+    with tabs[0]:
+        st.markdown("### Your Active Contracts")
+
+        active_contracts = [c for c in user_contracts if c.status == "ACTIVE"]
+
+        if active_contracts:
+            for contract in active_contracts:
+                with st.expander(f"{contract.contract_type.replace('_', ' ').title()} - {contract.contract_id[:8]}"):
+                    col1, col2 = st.columns([2, 1])
+
+                    with col1:
+                        st.markdown(f"**Contract Type**: {contract.contract_type.replace('_', ' ').title()}")
+                        st.markdown(f"**Created**: {contract.creation_date.strftime('%Y-%m-%d %H:%M')}")
+
+                        if contract.expiration:
+                            st.markdown(f"**Expires**: {contract.expiration.strftime('%Y-%m-%d %H:%M')}")
+
+                        st.markdown("**Terms**:")
+                        for key, value in contract.terms.items():
+                            if key in ["seller", "buyer", "provider", "client"]:
+                                # Find user name
+                                for u_id, u_data in app_state["users"].items():
+                                    if u_data["address"] == value:
+                                        value = u_data["name"]
+                                        break
+
+                            st.markdown(f"- {key.replace('_', ' ').title()}: {value}")
+
+                        st.markdown("**Parties**:")
+                        for party in contract.parties:
+                            party_name = party
+                            for u_id, u_data in app_state["users"].items():
+                                if u_data["address"] == party:
+                                    party_name = u_data["name"]
+                                    break
+
+                            signed = "✅ Signed" if party in contract.signatures else "❌ Unsigned"
+                            st.markdown(f"- {party_name}: {signed}")
+
+                    with col2:
+                        is_signed = user["address"] in contract.signatures
+
+                        if is_signed:
+                            if contract.is_fully_signed():
+                                if st.button("Execute Contract", key=f"execute_{contract.contract_id}"):
+                                    success, message = app_state["contract_manager"].execute_contract(
+                                        contract.contract_id,
+                                        {"executed_by": user["address"]}
+                                    )
+
+                                    if success:
+                                        st.success("Contract executed successfully!")
+                                    else:
+                                        st.error(message)
+                            else:
+                                st.info("Waiting for other parties to sign")
+                        else:
+                            if st.button("Sign Contract", key=f"sign_{contract.contract_id}"):
+                                contract.sign_contract(user["address"],
+                                                       f"0x{hashlib.sha256(str(time.time()).encode()).hexdigest()}")
+                                st.success("Contract signed successfully!")
+
+                        if st.button("Terminate Contract", key=f"terminate_{contract.contract_id}"):
+                            contract.terminate("User requested termination")
+                            st.success("Contract terminated!")
+        else:
+            st.info("You have no active contracts at the moment.")
+
+    with tabs[1]:
+        st.markdown("### Create New Contract")
+
+        contract_type = st.selectbox(
+            "Contract Type",
+            ["GOODS_EXCHANGE", "SERVICE_AGREEMENT", "LOAN_AGREEMENT", "PARTNERSHIP"]
+        )
+
+        # Other party selection
+        counterparties = []
+        for u_id, u_data in app_state["users"].items():
+            if u_data["address"] != user["address"]:
+                counterparties.append((u_id, u_data))
+
+        selected_counterparty = st.selectbox(
+            "Counterparty",
+            options=[cp[0] for cp in counterparties],
+            format_func=lambda x: app_state["users"][x]["name"]
+        )
+
+        counterparty_address = app_state["users"][selected_counterparty]["address"]
+
+        # Contract terms based on type
+        if contract_type == "GOODS_EXCHANGE":
+            st.markdown("### Goods Exchange Terms")
+
+            seller_type = st.radio("I am the:", ["Seller", "Buyer"])
+
+            if seller_type == "Seller":
+                seller = user["address"]
+                buyer = counterparty_address
+            else:
+                seller = counterparty_address
+                buyer = user["address"]
+
+            item = st.text_input("Item Description", "")
+            quantity = st.number_input("Quantity", min_value=1, value=1)
+            amount = st.number_input("Price (XVT)", min_value=0.01, value=10.0, step=0.1)
+
+            delivery_date = st.date_input("Delivery Date", datetime.now() + timedelta(days=7))
+
+            terms = {
+                "seller": seller,
+                "buyer": buyer,
+                "item": item,
+                "quantity": quantity,
+                "amount": amount,
+                "delivery_date": str(delivery_date)
+            }
+
+        elif contract_type == "SERVICE_AGREEMENT":
+            st.markdown("### Service Agreement Terms")
+
+            provider_type = st.radio("I am the:", ["Service Provider", "Client"])
+
+            if provider_type == "Service Provider":
+                provider = user["address"]
+                client = counterparty_address
+            else:
+                provider = counterparty_address
+                client = user["address"]
+
+            service = st.text_input("Service Description", "")
+            hours = st.number_input("Service Hours", min_value=1, value=10)
+            amount = st.number_input("Price (XVT)", min_value=0.01, value=20.0, step=0.1)
+
+            completion_date = st.date_input("Completion Date", datetime.now() + timedelta(days=14))
+
+            terms = {
+                "provider": provider,
+                "client": client,
+                "service": service,
+                "hours": hours,
+                "amount": amount,
+                "completion_date": str(completion_date)
+            }
+
+        elif contract_type == "LOAN_AGREEMENT":
+            st.markdown("### Loan Agreement Terms")
+
+            lender_type = st.radio("I am the:", ["Lender", "Borrower"])
+
+            if lender_type == "Lender":
+                lender = user["address"]
+                borrower = counterparty_address
+            else:
+                lender = counterparty_address
+                borrower = user["address"]
+
+            amount = st.number_input("Loan Amount (XVT)", min_value=0.01, value=100.0, step=0.1)
+            interest_rate = st.number_input("Interest Rate (%)", min_value=0.0, value=5.0, step=0.1)
+
+            repayment_date = st.date_input("Repayment Date", datetime.now() + timedelta(days=30))
+
+            terms = {
+                "lender": lender,
+                "borrower": borrower,
+                "amount": amount,
+                "interest_rate": interest_rate,
+                "repayment_date": str(repayment_date)
+            }
+
+        else:  # PARTNERSHIP
+            st.markdown("### Partnership Agreement Terms")
+
+            party1 = user["address"]
+            party2 = counterparty_address
+
+            purpose = st.text_input("Partnership Purpose", "")
+            contribution1 = st.number_input("Your Contribution (XVT)", min_value=0.01, value=50.0, step=0.1)
+            contribution2 = st.number_input("Partner's Contribution (XVT)", min_value=0.01, value=50.0, step=0.1)
+            profit_sharing = st.slider("Your Profit Share (%)", min_value=0, max_value=100, value=50)
+
+            duration = st.date_input("Partnership End Date", datetime.now() + timedelta(days=365))
+
+            terms = {
+                "party1": party1,
+                "party2": party2,
+                "purpose": purpose,
+                "contribution1": contribution1,
+                "contribution2": contribution2,
+                "profit_sharing": {party1: profit_sharing, party2: 100 - profit_sharing},
+                "duration": str(duration)
+            }
+
+        expiration = st.date_input("Contract Expiration Date", datetime.now() + timedelta(days=90))
+
+        if st.button("Create Contract"):
+            contract_id = app_state["contract_manager"].create_contract(
+                creator=user["address"],
+                contract_type=contract_type,
+                terms=terms,
+                expiration=datetime.combine(expiration, datetime.min.time())
+            )
+
+            contract = app_state["contract_manager"].get_contract(contract_id)
+            contract.add_party(counterparty_address)
+
+            st.success(f"Contract created successfully! Contract ID: {contract_id}")
+
+    with tabs[2]:
+        st.markdown("### Contract History")
+
+        executed_contracts = [c for c in user_contracts if c.status == "EXECUTED"]
+        terminated_contracts = [c for c in user_contracts if c.status == "TERMINATED"]
+        expired_contracts = [c for c in user_contracts if c.status == "EXPIRED"]
+
+        inactive_contracts = executed_contracts + terminated_contracts + expired_contracts
+
+        if inactive_contracts:
+            for contract in inactive_contracts:
+                with st.expander(
+                        f"{contract.contract_type.replace('_', ' ').title()} - {contract.contract_id[:8]} ({contract.status})"):
+                    st.markdown(f"**Contract Type**: {contract.contract_type.replace('_', ' ').title()}")
+                    st.markdown(f"**Status**: {contract.status}")
+                    st.markdown(f"**Created**: {contract.creation_date.strftime('%Y-%m-%d %H:%M')}")
+
+                    if contract.expiration:
+                        st.markdown(f"**Expired**: {contract.expiration.strftime('%Y-%m-%d %H:%M')}")
+
+                    st.markdown("**Terms**:")
+                    for key, value in contract.terms.items():
+                        if key in ["seller", "buyer", "provider", "client", "lender", "borrower", "party1", "party2"]:
+                            # Find user name
+                            for u_id, u_data in app_state["users"].items():
+                                if u_data["address"] == value:
+                                    value = u_data["name"]
+                                    break
+
+                        st.markdown(f"- {key.replace('_', ' ').title()}: {value}")
+
+                    st.markdown("**Execution History**:")
+                    for event in contract.execution_history:
+                        st.markdown(f"- {event['timestamp']}: {event['event']}")
+                        if "details" in event and event["details"]:
+                            for k, v in event["details"].items():
+                                st.markdown(f"  - {k}: {v}")
+        else:
+            st.info("You have no completed contracts yet.")
+
+    with tabs[3]:
+        st.markdown("### Contract Templates")
+
+        templates = [
+            {
+                "name": "Simple Product Sale",
+                "type": "GOODS_EXCHANGE",
+                "description": "Basic template for selling goods with fixed price and delivery date.",
+                "terms": {
+                    "item": "Product Name",
+                    "quantity": 1,
+                    "amount": 10.0,
+                    "delivery_date": str(datetime.now() + timedelta(days=7))
+                }
+            },
+            {
+                "name": "Professional Services",
+                "type": "SERVICE_AGREEMENT",
+                "description": "Detailed template for service providers with hourly rates and milestones.",
+                "terms": {
+                    "service": "Service Description",
+                    "hours": 10,
+                    "amount": 50.0,
+                    "completion_date": str(datetime.now() + timedelta(days=14))
+                }
+            },
+            {
+                "name": "Community Microloan",
+                "type": "LOAN_AGREEMENT",
+                "description": "Low-interest loan template with flexible repayment schedule.",
+                "terms": {
+                    "amount": 100.0,
+                    "interest_rate": 3.0,
+                    "repayment_date": str(datetime.now() + timedelta(days=30))
+                }
+            },
+            {
+                "name": "50/50 Partnership",
+                "type": "PARTNERSHIP",
+                "description": "Equal partnership with shared responsibilities and profits.",
+                "terms": {
+                    "purpose": "Partnership Purpose",
+                    "contribution1": 50.0,
+                    "contribution2": 50.0,
+                    "profit_sharing": {user["address"]: 50, "partner": 50},
+                    "duration": str(datetime.now() + timedelta(days=365))
+                }
+            }
+        ]
+
+        for i, template in enumerate(templates):
+            with st.container():
+                st.markdown('<div class="card">', unsafe_allow_html=True)
+
+                st.markdown(f"#### {template['name']}")
+                st.markdown(template["description"])
+                st.markdown(f"**Type**: {template['type'].replace('_', ' ').title()}")
+
+                if st.button("Use Template", key=f"template_{i}"):
+                    st.session_state["template"] = template
+                    st.experimental_rerun()
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+
+def render_wallet():
+    st.title("Wallet")
+    user = app_state["users"][app_state["current_user"]]
+
+    # Initialize session state for transaction details if not already done
+    if "transaction_details" not in st.session_state:
+        st.session_state.transaction_details = {}
+
+    # Wallet tabs
+    tabs = st.tabs(["Overview", "Transactions", "Send Funds", "Analytics"])
+
+    with tabs[0]:
+        st.markdown("### Wallet Overview")
+
+        # Balance card
+        st.markdown('<div class="highlight">', unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            st.markdown("#### Current Balance")
+            balance = app_state["blockchain"].get_balance(user["address"])
+            st.markdown(f"<h1>{balance:.2f} XVT</h1>", unsafe_allow_html=True)
+
+        with col2:
+            st.markdown("#### Quick Actions")
+            col2_1, col2_2 = st.columns(2)
+            with col2_1:
+                if st.button("Send XVT", key="quick_send_btn"):
+                    # Switch to the Send Funds tab
+                    st.session_state["wallet_tab"] = "Send Funds"
+                    st.experimental_rerun()
+            with col2_2:
+                if st.button("Receive XVT", key="quick_receive_btn"):
+                    # Show receive address
+                    st.info(f"Your wallet address: {user['address']}")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Transaction history summary
+        st.markdown("### Recent Transactions")
+
+        user_transactions = app_state["blockchain"].get_user_transactions(user["address"])
+
+        # Sort by timestamp, most recent first
+        user_transactions.sort(key=lambda x: datetime.strptime(x["timestamp"], "%Y-%m-%d %H:%M:%S.%f"), reverse=True)
+
+        if user_transactions:
+            for i, transaction in enumerate(user_transactions[:5]):
+                col1, col2, col3 = st.columns([1, 2, 1])
+
+                # Transaction direction
+                is_inbound = transaction["recipient"] == user["address"]
+                tx_type = "Received" if is_inbound else "Sent"
+
+                with col1:
+                    # Transaction icon
+                    if transaction["transaction_type"] == "MINING_REWARD":
+                        st.markdown("🏆")
+                    elif transaction["transaction_type"] == "CONTRACT_EXECUTION":
+                        st.markdown("📜")
+                    elif is_inbound:
+                        st.markdown("⬇️")
+                    else:
+                        st.markdown("⬆️")
+
+                    # Transaction amount with color
+                    if is_inbound:
+                        st.markdown(f"<span style='color:#4CAF50;'>+{transaction['amount']:.2f} XVT</span>",
+                                    unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"<span style='color:#F44336;'>-{transaction['amount']:.2f} XVT</span>",
+                                    unsafe_allow_html=True)
+
+                with col2:
+                    # Transaction details
+                    if transaction["transaction_type"] == "MINING_REWARD":
+                        st.markdown("Mining Reward")
+                    elif transaction["transaction_type"] == "CONTRACT_EXECUTION":
+                        st.markdown(f"Contract Execution: {transaction['details'].get('contract_id', '')[:8]}")
+                    else:
+                        # Find counterparty name
+                        counterparty = transaction["sender"] if is_inbound else transaction["recipient"]
+                        counterparty_name = counterparty
+
+                        for u_id, u_data in app_state["users"].items():
+                            if u_data["address"] == counterparty:
+                                counterparty_name = u_data["name"]
+                                break
+
+                        st.markdown(f"{tx_type} from {counterparty_name}")
+
+                    # Transaction timestamp
+                    tx_timestamp = datetime.strptime(transaction["timestamp"], "%Y-%m-%d %H:%M:%S.%f")
+                    st.markdown(f"<small>{tx_timestamp.strftime('%Y-%m-%d %H:%M')}</small>", unsafe_allow_html=True)
+
+                with col3:
+                    # Provide transaction insights
+                    if is_inbound:
+                        st.markdown(f"✅ **Incoming**")
+                    else:
+                        st.markdown(f"🔴 **Outgoing**")
+
+                    # Show transaction confirmation status
+                    confirmations = random.randint(1, 12)  # Mock confirmations
+                    if confirmations < 3:
+                        st.markdown(f"🕒 **Pending ({confirmations}/12 confirmations)**")
+                    else:
+                        st.markdown(f"✔ **Confirmed ({confirmations}/12 confirmations)**")
+
+                    # Add a button to view transaction details with a unique key
+                    detail_key = f"tx_detail_{i}"
+
+                    # Use a button to toggle details visibility
+                    if st.button("View Details", key=detail_key):
+                        # Safely toggle the detail view in session state
+                        current_state = st.session_state.transaction_details.get(detail_key, False)
+                        st.session_state.transaction_details[detail_key] = not current_state
+
+                    # Show transaction details if button was clicked
+                    if st.session_state.transaction_details.get(detail_key, False):
+                        st.json(transaction)
+
+    with tabs[1]:
+        st.markdown("### Transaction History")
+
+        # Filter options
+        col1, col2 = st.columns(2)
+        with col1:
+            tx_type_filter = st.selectbox(
+                "Transaction Type",
+                ["All Types", "Sent", "Received", "Contract", "Mining Reward"]
+            )
+
+        with col2:
+            date_range = st.date_input(
+                "Date Range",
+                [datetime.now() - timedelta(days=30), datetime.now()]
+            )
+
+        # Get all user transactions
+        all_transactions = app_state["blockchain"].get_user_transactions(user["address"])
+
+        # Apply filters
+        filtered_transactions = []
+        for tx in all_transactions:
+            # Parse transaction timestamp
+            tx_date = datetime.strptime(tx["timestamp"], "%Y-%m-%d %H:%M:%S.%f").date()
+
+            # Check date range
+            if date_range[0] <= tx_date <= date_range[1]:
+                # Check transaction type
+                if tx_type_filter == "All Types":
+                    filtered_transactions.append(tx)
+                elif tx_type_filter == "Sent" and tx["sender"] == user["address"]:
+                    filtered_transactions.append(tx)
+                elif tx_type_filter == "Received" and tx["recipient"] == user["address"]:
+                    filtered_transactions.append(tx)
+                elif tx_type_filter == "Contract" and tx["transaction_type"] == "CONTRACT_EXECUTION":
+                    filtered_transactions.append(tx)
+                elif tx_type_filter == "Mining Reward" and tx["transaction_type"] == "MINING_REWARD":
+                    filtered_transactions.append(tx)
+
+        # Display transactions in a table
+        if filtered_transactions:
+            st.markdown('<div class="table-container">', unsafe_allow_html=True)
+
+            # Create columns for the table
+            cols = st.columns([1, 2, 2, 1, 1])
+            cols[0].markdown("**Type**")
+            cols[1].markdown("**Date**")
+            cols[2].markdown("**Details**")
+            cols[3].markdown("**Amount**")
+            cols[4].markdown("**Status**")
+
+            st.markdown('<hr style="margin: 0.5rem 0;">', unsafe_allow_html=True)
+
+            for i, tx in enumerate(filtered_transactions):
+                cols = st.columns([1, 2, 2, 1, 1])
+
+                # Transaction type
+                if tx["transaction_type"] == "MINING_REWARD":
+                    cols[0].markdown("🏆")
+                elif tx["transaction_type"] == "CONTRACT_EXECUTION":
+                    cols[0].markdown("📜")
+                elif tx["recipient"] == user["address"]:
+                    cols[0].markdown("⬇️")
+                else:
+                    cols[0].markdown("⬆️")
+
+                # Date
+                tx_date = datetime.strptime(tx["timestamp"], "%Y-%m-%d %H:%M:%S.%f")
+                cols[1].markdown(tx_date.strftime("%Y-%m-%d %H:%M"))
+
+                # Details
+                if tx["transaction_type"] == "MINING_REWARD":
+                    cols[2].markdown("Mining Reward")
+                elif tx["transaction_type"] == "CONTRACT_EXECUTION":
+                    cols[2].markdown(f"Contract: {tx['details'].get('contract_id', '')[:8]}")
+                else:
+                    counterparty = tx["sender"] if tx["recipient"] == user["address"] else tx["recipient"]
+                    counterparty_name = counterparty
+                    for u_id, u_data in app_state["users"].items():
+                        if u_data["address"] == counterparty:
+                            counterparty_name = u_data["name"]
+                            break
+                    cols[2].markdown(counterparty_name)
+
+                # Amount
+                is_inbound = tx["recipient"] == user["address"]
+                if is_inbound:
+                    cols[3].markdown(f"<span style='color:#4CAF50;'>+{tx['amount']:.2f}</span>", unsafe_allow_html=True)
+                else:
+                    cols[3].markdown(f"<span style='color:#F44336;'>-{tx['amount']:.2f}</span>", unsafe_allow_html=True)
+
+                # Status
+                confirmations = random.randint(1, 12)  # Mock confirmations
+                if confirmations < 3:
+                    cols[4].markdown("🕒 Pending")
+                else:
+                    cols[4].markdown("✅ Confirmed")
+
+                st.markdown('<hr style="margin: 0.5rem 0;">', unsafe_allow_html=True)
+
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("No transactions found matching your filters.")
+
+    with tabs[2]:
+        st.markdown("### Send Funds")
+
+        # Recipient selection
+        recipient_options = []
+        for u_id, u_data in app_state["users"].items():
+            if u_data["address"] != user["address"]:
+                recipient_options.append((u_id, u_data))
+
+        selected_recipient = st.selectbox(
+            "Recipient",
+            options=[r[0] for r in recipient_options],
+            format_func=lambda x: app_state["users"][x]["name"]
+        )
+
+        recipient_address = app_state["users"][selected_recipient]["address"]
+
+        # Amount input
+        amount = st.number_input("Amount (XVT)", min_value=0.01, value=1.0, step=0.1)
+
+        # Note input
+        note = st.text_input("Note (optional)")
+
+        # Current balance display
+        balance = app_state["blockchain"].get_balance(user["address"])
+        st.markdown(f"Current Balance: **{balance:.2f} XVT**")
+
+        # Send button
+        if st.button("Send XVT", key="send_xvt_btn"):
+            if amount > balance:
+                st.error("Insufficient funds for this transaction.")
+            else:
+                # Add transaction to blockchain
+                app_state["blockchain"].add_transaction(
+                    user["address"],
+                    recipient_address,
+                    amount,
+                    "PAYMENT",
+                    {"note": note if note else "Payment"}
+                )
+
+                # Mine the transaction
+                app_state["blockchain"].mine_pending_transactions("0x0000000000000000000000000000000000000000")
+
+                st.success(f"Successfully sent {amount:.2f} XVT to {app_state['users'][selected_recipient]['name']}!")
+
+    with tabs[3]:
+        st.markdown("### Wallet Analytics")
+
+        # Generate some analytics data
+        user_transactions = app_state["blockchain"].get_user_transactions(user["address"])
+
+        # Transaction volume over time
+        st.markdown("#### Transaction Volume Over Time")
+
+        # Prepare data for the chart
+        tx_dates = []
+        tx_amounts = []
+
+        for tx in user_transactions:
+            tx_date = datetime.strptime(tx["timestamp"], "%Y-%m-%d %H:%M:%S.%f").date()
+            tx_amount = tx["amount"]
+
+            tx_dates.append(tx_date)
+            tx_amounts.append(tx_amount)
+
+        # Create a line chart with Plotly
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(
+            x=tx_dates,
+            y=tx_amounts,
+            mode='lines+markers',
+            name='Transaction Amount',
+            line=dict(color='#4CAF50', width=2)
+        ))
+
+        fig.update_layout(
+            title="Transaction Volume",
+            xaxis_title="Date",
+            yaxis_title="Amount (XVT)",
+            template="plotly_dark",
+            margin=dict(l=0, r=0, t=40, b=0),
+            height=300,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Transaction type breakdown
+        st.markdown("#### Transaction Type Breakdown")
+
+        # Count transaction types
+        tx_types = {
+            "Sent": 0,
+            "Received": 0,
+            "Contract": 0,
+            "Mining": 0
+        }
+
+        for tx in user_transactions:
+            if tx["transaction_type"] == "MINING_REWARD":
+                tx_types["Mining"] += 1
+            elif tx["transaction_type"] == "CONTRACT_EXECUTION":
+                tx_types["Contract"] += 1
+            elif tx["sender"] == user["address"]:
+                tx_types["Sent"] += 1
+            else:
+                tx_types["Received"] += 1
+
+        # Create a pie chart
+        fig = go.Figure(data=[go.Pie(
+            labels=list(tx_types.keys()),
+            values=list(tx_types.values()),
+            hole=.4,
+            marker=dict(colors=['#F44336', '#4CAF50', '#2196F3', '#FFC107'])
+        )])
+
+        fig.update_layout(
+            title="Transaction Types",
+            template="plotly_dark",
+            margin=dict(l=0, r=0, t=40, b=0),
+            height=300,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+def render_community_forum():
+    st.title("Community Forum")
+    st.markdown("### Engage with the Community & Share Ideas")
+
+    # Example users
+    example_users = [
+        "Alice Johnson", "Bob Smith", "Carlos Rivera", "Dana Lee", "Emma Thompson",
+        "Frank Williams", "Grace Chen", "Hiro Tanaka", "Isla Patel", "Jack O'Connor"
+    ]
+
+    # Pre-fill the community forum with sample discussions if empty
+    if "community_posts" not in st.session_state or not st.session_state["community_posts"]:
+        st.session_state["community_posts"] = [
+            {"user": "Alice Johnson", "content": "How can we improve local trade efficiency using blockchain?",
+             "comments": [
+                 {"user": "Bob Smith", "content": "Maybe integrating better AI demand predictions?"},
+                 {"user": "Grace Chen", "content": "Smart contracts could automate supply chain deals!"}
+             ]},
+            {"user": "Carlos Rivera", "content": "What security measures do you suggest for protecting wallets?",
+             "comments": [
+                 {"user": "Dana Lee", "content": "Multi-signature authentication is a must."},
+                 {"user": "Frank Williams", "content": "Using cold wallets for high-value funds is a good idea."}
+             ]}
+        ]
+
+    # Create a new post
+    new_post = st.text_area("Create a new post:", key="new_post_input")
+    if st.button("Post", key="post_button"):
+        if new_post.strip():
+            st.session_state["community_posts"].insert(0, {  # Insert at the top
+                "user": app_state["users"][app_state["current_user"]]["name"],
+                "content": new_post,
+                "comments": []
+            })
+            st.success("Post created successfully!")
+            st.experimental_rerun()
+        else:
+            st.warning("Post cannot be empty.")
+
+    st.markdown("---")
+
+    # Display posts
+    for i, post in enumerate(st.session_state["community_posts"]):
+        with st.container():
+            with st.expander(f"📢 {post['user']} says: {post['content']}"):
+                if post["comments"]:
+                    for j, comment in enumerate(post["comments"]):
+                        st.markdown(f"💬 **{comment['user']}**: {comment['content']}")
+
+                # Allow new comments
+                comment_text = st.text_input(f"Add a comment to post {i}:", key=f"comment_input_{i}")
+                if st.button(f"Comment on {i}", key=f"comment_btn_{i}"):
+                    if comment_text.strip():
+                        post["comments"].append({
+                            "user": app_state["users"][app_state["current_user"]]["name"],
+                            "content": comment_text
+                        })
+                        st.experimental_rerun()
+                    else:
+                        st.warning("Comment cannot be empty.")
+
+
+def render_ai_insights():
+    st.title("AI Insights")
+    st.markdown("### AI-Driven Economic Predictions & Strategies")
+
+    # Choose category with unique key
+    category = st.selectbox("Select Market Category",
+                            ["Agriculture", "Handicrafts", "Services", "Technology", "Education"],
+                            key="ai_category_select")
+
+    # Generate AI-driven prediction
+    features = [random.random() for _ in range(4)]
+    prediction = app_state["economic_ai"].predict_supply_demand(category, features)
+
+    # Display predictions in a card
+    st.markdown('<div class="highlight">', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.metric("Predicted Demand", f"{prediction['predicted_demand']:.1f}")
+
+    with col2:
+        st.metric("Confidence Level", f"{prediction['confidence'] * 100:.1f}%")
+
+    # Display factors affecting prediction
+    st.markdown("#### Key Factors")
+    factor_cols = st.columns(4)
+
+    factors = prediction["factors"]
+    for i, (factor, value) in enumerate(factors.items()):
+        with factor_cols[i]:
+            factor_name = factor.replace("_", " ").title()
+            direction = "↑" if value > 1 else "↓"
+            st.markdown(f"**{factor_name}**: {value:.2f} {direction}")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Market Trends Chart
+    st.markdown("### Market Trends Over Time")
+    trends_data = app_state["economic_ai"].get_market_trends(category, days=30)
+
+    # Ensure we have data
+    if not trends_data.empty:
+        fig = go.Figure()
+
+        # Add demand trend
+        fig.add_trace(go.Scatter(
+            x=trends_data["date"],
+            y=trends_data["demand"],
+            mode='lines',
+            name='Demand',
+            line=dict(color='#FFA500', width=3)
+        ))
+
+        # Add supply trend
+        fig.add_trace(go.Scatter(
+            x=trends_data["date"],
+            y=trends_data["supply"],
+            mode='lines',
+            name='Supply',
+            line=dict(color='#4CAF50', width=3)
+        ))
+
+        # Add price trend on secondary y-axis
+        fig.add_trace(go.Scatter(
+            x=trends_data["date"],
+            y=trends_data["price"],
+            mode='lines',
+            name='Price',
+            line=dict(color='#2196F3', width=3),
+            yaxis="y2"
+        ))
+
+        fig.update_layout(
+            title=f"Market Trends for {category}",
+            xaxis_title="Date",
+            yaxis_title="Volume",
+            yaxis2=dict(
+                title="Price (XVT)",
+                overlaying="y",
+                side="right"
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            template="plotly_dark",
+            margin=dict(l=0, r=0, t=40, b=0),
+            height=350,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning(f"No trend data available for {category}")
+
+    # AI Strategy Recommendations
+    st.markdown("### AI-Recommended Strategies")
+    strategies = app_state["economic_ai"].recommend_economic_strategies({}, trends_data)
+
+    for i, recommendation in enumerate(strategies):
+        with st.container():
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            st.markdown(f"#### {recommendation['strategy_type'].replace('_', ' ').title()}")
+            st.markdown(recommendation["description"])
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Expected Growth", f"{recommendation['expected_growth'] * 100:.1f}%")
+            with col2:
+                st.metric("Risk Level", recommendation["risk_level"])
+            with col3:
+                st.metric("Cost", f"{recommendation['implementation_cost']:.2f} XVT")
+
+            # Add implementation button
+            if st.button("Implement Strategy", key=f"implement_strategy_{i}"):
+                st.success(
+                    f"Strategy implementation plan for {recommendation['strategy_type'].replace('_', ' ').title()} has been added to your dashboard.")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # GDP Impact Prediction
+    st.markdown("### Local Economy GDP Impact")
+
+    gdp_impact = app_state["economic_ai"].predict_gdp_impact({})
+
+    st.markdown('<div class="highlight">', unsafe_allow_html=True)
+    st.metric("Predicted Growth", f"{gdp_impact['predicted_growth_percentage']:.2f}%")
+
+    st.markdown("#### Key Growth Drivers")
+    driver_cols = st.columns(4)
+
+    for i, (driver, value) in enumerate(gdp_impact["key_drivers"].items()):
+        with driver_cols[i]:
+            driver_name = driver.replace("_", " ").title()
+            st.markdown(f"**{driver_name}**: {value:.2f}")
+
+    st.markdown("#### Confidence Interval")
+    st.markdown(
+        f"Growth is expected to be between **{gdp_impact['confidence_interval'][0]:.2f}%** and **{gdp_impact['confidence_interval'][1]:.2f}%**")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# Settings page
+def render_settings():
+    st.title("Settings")
+    st.markdown("### Customize Your Experience")
+
+    # Load settings if not already in session state
+    if "user_settings" not in st.session_state:
+        st.session_state["user_settings"] = {
+            "theme": "Light",
+            "notifications": True,
+            "auto_update": False
+        }
+
+    # Select Theme
+    theme = st.selectbox("Select Theme", ["Light", "Dark", "System Default"],
+                         index=["Light", "Dark", "System Default"].index(
+                             st.session_state["user_settings"]["theme"]),
+                         key="theme_select")
+
+    # Enable Notifications
+    notifications = st.checkbox("Enable Notifications", value=st.session_state["user_settings"]["notifications"],
+                                key="notifications_checkbox")
+
+    # Auto-Update Toggle
+    auto_update = st.checkbox("Enable Auto-Update", value=st.session_state["user_settings"]["auto_update"],
+                              key="auto_update_checkbox")
+
+    # Save Button
+    if st.button("Save Settings", key="save_settings_button"):
+        st.session_state["user_settings"] = {
+            "theme": theme,
+            "notifications": notifications,
+            "auto_update": auto_update
+        }
+        st.success("Settings saved successfully!")
+
+
+# GitHub repository section at the bottom of the app
+def render_github_repo():
+    st.markdown("---")
+    st.markdown("### About Nexovault")
+    st.markdown("""
+   Nexovault is an AI-powered platform for building local economies using blockchain technology.
+   It enables communities to create their own economic ecosystems with smart contracts,
+   AI-driven market insights, and secure transactions.
+   """)
+    st.markdown("© 2023 Nexovault | [GitHub Repository](https://github.com/nexovault/platform)")
+
+
+# Initialize app state
+app_state = initialize_app_state()
+
+# Main app
+if __name__ == "__main__":
+    navigation = render_sidebar()
+
+    if navigation == "Dashboard":
+        render_dashboard()
+    elif navigation == "Marketplace":
+        render_marketplace()
+    elif navigation == "Contracts":
+        render_contracts()
+    elif navigation == "Wallet":
+        render_wallet()
+    elif navigation == "AI Insights":
+        render_ai_insights()
+    elif navigation == "Community":
+        render_community_forum()
+    elif navigation == "Settings":
+        render_settings()
+
+    render_github_repo()
